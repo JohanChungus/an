@@ -31,7 +31,6 @@ request = str("GET / HTTP/1.1\r\n" +
 
 ctx = ssl.create_default_context()
 ctx.set_alpn_protocols(['h2', 'http/1.1'])
-ctx.load_cert_chain(certfile="localhost-privkey.pem", keyfile="localhost-privkey.pem")
 
 class WorkerThread(threading.Thread):
     def __init__(self):
