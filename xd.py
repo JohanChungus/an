@@ -12,7 +12,7 @@ from h2.exceptions import ProtocolError
 
 TARGET = 'https://file.cunhua.today'
 CONNECTIONS = 1000
-STREAMS = 100p
+STREAMS = 1000
 DATA = b'Hello, world'
 
 connections = set()
