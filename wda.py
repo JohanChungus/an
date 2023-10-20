@@ -8,16 +8,6 @@ import os
 
 os.system("clear")
 os.system("figlet HTTP/2 DDOS")
-print "Code by: H1m404"
-print "Tool: HTTP/2 DDOS"
-print "Team: 407 Authentic Exploit"
-print "thanks to: H1m404 - MR.L0V3R - Mr.W4hyu"
-print "Greets to: Mr.TenWap - Mr.TamfanX Cyber Team"
-print "Spesial Thanks to: 2Easy4Hack Team"
-print "Contact me: https://fb.me/n00b.me"
-print "-------------------------------------------------"
-print " "
-
 if len(sys.argv) < 4:
     print "Usage: " + sys.argv[0] + " <target> <port> <threads>"
     sys.exit()
