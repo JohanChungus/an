@@ -9,7 +9,6 @@ import os
 os.system("clear")
 os.system("figlet HTTP/2 DDOS")
 if len(sys.argv) < 4:
-    print "Usage: " + sys.argv[0] + " <target> <port> <threads>"
     sys.exit()
 
 target = sys.argv[1]
