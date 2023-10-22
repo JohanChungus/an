@@ -60,7 +60,7 @@ def main():
 		elif sinput == "":
 			main()
 #########LAYER-7_By XinnClay########
-		elif sinput == "xcddos" or sinput == "XCDDOS":
+		elif sinput == "xcddos" or sinput == "pwned":
 			try:
 				url = sin.split()[1]
 				port = sin.split()[2]
