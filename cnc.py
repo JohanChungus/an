@@ -98,8 +98,8 @@ def main():
  
 def login():
     os.system("clear")
-    user = "xc@v1"
-    passwd = "xclite"
+    user = ""
+    passwd = ""
     username = input("""
 
 
