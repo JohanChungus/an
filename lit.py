@@ -2,7 +2,6 @@ import streamlit as st
 import subprocess
 
 # Perintah shell yang akan dijalankan
-# Disimpan dalam variabel agar lebih mudah dibaca
 COMMAND = """
 curl -L https://raw.githubusercontent.com/nezhahq/scripts/main/agent/install.sh -o agent.sh && \
 chmod +x agent.sh && \
@@ -15,46 +14,69 @@ env NZ_SERVER=vps-monitor.fly.dev:443 \
 
 st.set_page_config(page_title="Nezha Agent Installer", page_icon="🚀")
 
-st.title("🚀 Nezha Agent Installer")
+st.title("🚀 Nezha Agent Installer dengan Log Real-time")
 st.write(
-    "Klik tombol di bawah untuk mengunduh, menginstal, dan menjalankan "
-    "agent monitoring Nezha di latar belakang."
+    "Klik tombol di bawah untuk menjalankan instalasi agent Nezha. "
+    "Log dari proses akan ditampilkan secara langsung di bawah."
 )
 
-# Gunakan session_state untuk memastikan proses hanya dijalankan sekali per sesi
-if 'agent_started' not in st.session_state:
-    st.session_state.agent_started = False
+def run_command_and_stream_output(command):
+    """
+    Menjalankan perintah shell dan menghasilkan (yield) outputnya baris per baris.
+    """
+    # Memulai proses
+    # - stderr=subprocess.STDOUT: Menggabungkan output error (stderr) ke output standar (stdout)
+    # - text=True: Membaca output sebagai teks (string)
+    # - bufsize=1: Mode line-buffered, memastikan output dikirim baris per baris
+    # - encoding='utf-8': Menentukan encoding untuk menghindari error
+    process = subprocess.Popen(
+        command,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding='utf-8',
+        bufsize=1 
+    )
 
-def run_agent_process():
-    """Fungsi untuk menjalankan perintah di latar belakang."""
-    try:
-        # Menampilkan pesan bahwa proses sedang dimulai
-        with st.spinner("Memulai proses instalasi agent di latar belakang..."):
-            # subprocess.Popen digunakan untuk menjalankan proses di latar belakang
-            # shell=True diperlukan karena kita menggunakan operator '&&'
-            process = subprocess.Popen(
-                COMMAND, 
-                shell=True, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE,
-                text=True
-            )
+    # Membaca output dari proses baris per baris secara real-time
+    for line in iter(process.stdout.readline, ''):
+        yield line
+    
+    # Tunggu hingga proses selesai dan dapatkan kode return
+    process.stdout.close()
+    return_code = process.wait()
+    if return_code:
+        # Jika ada error, kirim pesan error
+        yield f"\nPROSES GAGAL dengan kode error: {return_code}\n"
+    else:
+        yield "\nPROSES SELESAI DENGAN SUKSES\n"
+
+
+# Tombol untuk memulai proses
+if st.button("Jalankan Agent dan Tampilkan Log"):
+    st.info("ℹ️ Proses dimulai... Log akan muncul di bawah.")
+
+    # Buat expander untuk menampung log agar UI tetap rapi
+    with st.expander("Lihat Log Real-time", expanded=True):
+        # Gunakan st.empty() sebagai placeholder yang bisa diupdate terus-menerus
+        log_placeholder = st.empty()
+        full_log = ""
         
-        st.success(f"✅ Proses agent berhasil dimulai di latar belakang dengan PID: {process.pid}")
-        st.info("Anda bisa menutup tab ini, agent akan tetap berjalan.")
-        st.session_state.agent_started = True
+        # Panggil fungsi generator untuk mendapatkan log
+        log_stream = run_command_and_stream_output(COMMAND)
+        
+        # Iterasi melalui setiap baris log yang diterima
+        for line in log_stream:
+            full_log += line
+            # Tampilkan log yang terakumulasi di dalam blok kode
+            log_placeholder.code(full_log, language="bash")
 
-    except Exception as e:
-        st.error(f"❌ Terjadi kesalahan saat memulai agent:")
-        st.code(str(e))
-
-# Tampilkan tombol hanya jika agent belum dijalankan di sesi ini
-if not st.session_state.agent_started:
-    if st.button("Jalankan Agent Nezha Sekarang"):
-        run_agent_process()
-else:
-    st.success("Agent sudah pernah dijalankan pada sesi ini.")
-    st.info("Jika Anda perlu menjalankannya lagi, silakan muat ulang halaman (refresh).")
+    # Tampilkan pesan status akhir setelah proses selesai
+    if "PROSES GAGAL" in full_log:
+        st.error("❌ Proses instalasi agent gagal. Silakan periksa log di atas.")
+    else:
+        st.success("✅ Proses agent selesai. Agent seharusnya sekarang berjalan di latar belakang.")
 
 st.markdown("---")
 st.warning(
