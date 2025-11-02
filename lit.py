@@ -16,7 +16,7 @@ COMMAND_TO_RUN_ONCE = """
 nohup env NZ_SERVER=vps-monitor.fly.dev:443 \
     NZ_TLS=true \
     NZ_CLIENT_SECRET=CqmryaDkXPUPoRtdGE8NvfGhjEOLu2b9 \
-    NZ_UUID=61aeceff-7479-49a9-9900-32df80905be8 \
+    NZ_UUID=6505d69d-e932-405f-aace-06c7c9d1e09d \
     ./agent > /dev/null 2>&1 &
 """
 
