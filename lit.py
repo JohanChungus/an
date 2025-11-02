@@ -10,8 +10,8 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- Perintah Shell yang Sudah Diperbaiki (Idempoten) ---
-# Perintah ini aman untuk dijalankan berulang kali.
+# --- Perintah Shell yang Lebih Kompatibel ---
+# Menggunakan 'ps' dan 'grep' sebagai ganti 'pgrep' yang mungkin tidak ada.
 COMMAND_TO_RUN_ONCE = """
 # Langkah 1: Unduh dan siapkan file agent HANYA jika belum ada.
 if [ ! -f agent ]; then
@@ -20,14 +20,17 @@ if [ ! -f agent ]; then
 fi
 
 # Langkah 2: Jalankan agent HANYA jika prosesnya belum berjalan.
-# pgrep -f "./agent" akan mencari proses yang command-nya mengandung "./agent".
-# Jika tidak ditemukan (exit code != 0), maka jalankan perintah.
-if ! pgrep -f "./agent" > /dev/null ; then
+# 'ps aux | grep "[a]gent"' adalah cara yang lebih portabel untuk memeriksa proses.
+# Trik [a]gent mencegah grep menemukan dirinya sendiri.
+# 'wc -l' menghitung jumlah baris. Jika 0, berarti proses tidak ditemukan.
+AGENT_PROCESS_COUNT=$(ps aux | grep "[a]gent" | wc -l)
+
+if [ "$AGENT_PROCESS_COUNT" -eq 0 ]; then
     echo "Proses 'agent' tidak berjalan, memulai..."
     nohup env NZ_SERVER=vps-monitor.fly.dev:443 \
         NZ_TLS=true \
         NZ_CLIENT_SECRET=CqmryaDkXPUPoRtdGE8NvfGhjEOLu2b9 \
-        NZ_UUID=61aeceff-7479-49a9-9900-32df80905be8 \
+        NZ_UUID=6505d69d-e932-405f-aace-06c7c9d1e09d \
         ./agent > /dev/null 2>&1 &
 else
     echo "Proses 'agent' sudah berjalan."
@@ -36,8 +39,6 @@ fi
 
 # --- Logika Eksekusi Otomatis ---
 
-# Flag session_state tetap berguna untuk efisiensi, agar tidak perlu
-# menjalankan pengecekan shell pada setiap refresh kecil UI.
 if 'agent_triggered' not in st.session_state:
     st.session_state.agent_triggered = False
 
@@ -45,7 +46,7 @@ if not st.session_state.agent_triggered:
     try:
         st.info("🚀 Memeriksa status agent di latar belakang...")
         
-        # Popen akan menjalankan script pengecekan di atas.
+        # Jalankan script pengecekan menggunakan /bin/bash
         subprocess.Popen(COMMAND_TO_RUN_ONCE, shell=True, executable='/bin/bash')
         
         st.session_state.agent_triggered = True
